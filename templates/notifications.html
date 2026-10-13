@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+
+{% block title %}Notifications - BUS-TED!{% endblock %}
+
+{% block content %}
+<div style="max-width: 800px; margin: 0 auto;">
+
+  <!-- Header Card -->
+  <div class="card" style="margin-bottom: 24px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+      <div>
+        <h2 style="font-size: 22px; font-weight: 800; color: #0f172a;">Campus Transit Notifications</h2>
+        <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+          Real-time alerts for your assigned bus, trip initiations, and boarding confirmations.
+        </p>
+      </div>
+
+      <form method="POST" action="{{ url_for('mark_all_notifications_read') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline btn-sm">
+          <i class="fa-solid fa-check-double"></i> Mark All as Read
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Notification List -->
+  <div class="card">
+    <div class="list-items">
+      {% if notifications %}
+        {% for notif in notifications %}
+          <div class="list-item-card" style="padding: 16px; {% if notif.is_read == 0 %}background: #eff6ff; border-color: #bfdbfe;{% endif %}">
+            <div class="item-left">
+              <div class="item-icon" style="background: {% if notif.type == 'trip' %}#dbeafe{% elif notif.type == 'success' %}#d1fae5{% else %}#fef3c7{% endif %}; color: {% if notif.type == 'trip' %}#1d4ed8{% elif notif.type == 'success' %}#059669{% else %}#d97706{% endif %}; width: 44px; height: 44px; font-size: 20px;">
+                <i class="fa-solid {% if notif.type == 'trip' %}fa-bus{% elif notif.type == 'success' %}fa-circle-check{% else %}fa-bell{% endif %}"></i>
+              </div>
+              <div class="item-details">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <h4 style="font-size: 15px; font-weight: 700;">{{ notif.title }}</h4>
+                  {% if notif.is_read == 0 %}
+                    <span style="font-size: 10px; font-weight: 800; background: #2563eb; color: white; padding: 2px 6px; border-radius: 9999px;">NEW</span>
+                  {% endif %}
+                </div>
+                <p style="font-size: 13px; color: var(--text-main); margin-top: 4px;">{{ notif.message }}</p>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                  <i class="fa-regular fa-clock"></i> {{ notif.created_at }}
+                </div>
+              </div>
+            </div>
+
+            <div class="item-right">
+              {% if notif.is_read == 0 %}
+                <form method="POST" action="{{ url_for('mark_notification_read', notif_id=notif.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-outline btn-sm" title="Mark Read">
+                    <i class="fa-solid fa-check"></i>
+                  </button>
+                </form>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty-state">
+          <div class="empty-icon">
+            <i class="fa-regular fa-bell-slash"></i>
+          </div>
+          <h4>No Notifications Yet</h4>
+          <p>When drivers start trips or you record boarding attendance, real-time alerts will appear here.</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

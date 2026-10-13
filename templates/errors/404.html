@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+
+{% block title %}Page Not Found - BUS-TED!{% endblock %}
+
+{% block content %}
+<div class="card" style="text-align: center; padding: 60px 20px; max-width: 540px; margin: 40px auto;">
+  <div style="font-size: 64px; color: #f59e0b; margin-bottom: 16px;">
+    <i class="fa-solid fa-signs-post"></i>
+  </div>
+  <h2 style="font-size: 26px; font-weight: 800; color: #0f172a;">404 - Stop Not Found</h2>
+  <p style="font-size: 14px; color: var(--text-muted); margin: 8px 0 24px;">
+    The page or campus route you are trying to reach does not exist or has moved.
+  </p>
+  <div>
+    <a href="{{ url_for('index') }}" class="btn btn-primary">
+      <i class="fa-solid fa-house"></i> Return to Campus Dashboard
+    </a>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+
+{% block title %}Scan Boarding QR - BUS-TED!{% endblock %}
+
+{% block content %}
+<div style="max-width: 680px; margin: 0 auto;">
+
+  <!-- Page Header Card -->
+  <div class="card" style="margin-bottom: 24px; text-align: center;">
+    <div style="width: 52px; height: 52px; background: var(--primary-light); color: var(--primary); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; font-size: 26px; margin: 0 auto 12px;">
+      <i class="fa-solid fa-qrcode"></i>
+    </div>
+    <h2 style="font-size: 22px; font-weight: 800; color: #0f172a;">Scan Bus Boarding Pass</h2>
+    <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+      Hold your camera up to the driver's active QR code screen to verify your boarding.
+    </p>
+    {% if assigned_bus %}
+      <div style="margin-top: 12px; display: inline-block; padding: 4px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 9999px; font-size: 12px; font-weight: 600;">
+        <i class="fa-solid fa-bus" style="color: var(--primary);"></i> Assigned to: {{ assigned_bus.bus_number }} ({{ assigned_bus.route_name }})
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Camera Scanner Box Card -->
+  <div class="card">
+    <!-- Camera Viewport Container -->
+    <div id="reader" style="width: 100%; min-height: 280px; background: #0f172a; border-radius: var(--radius-md); overflow: hidden; position: relative;"></div>
+
+    <div style="display: flex; gap: 12px; margin-top: 16px; justify-content: center;">
+      <button type="button" class="btn btn-primary" id="startScanBtn" onclick="startScanner()">
+        <i class="fa-solid fa-camera"></i> Start Camera Scanner
+      </button>
+      <button type="button" class="btn btn-outline" id="stopScanBtn" onclick="stopScanner()" style="display: none;">
+        <i class="fa-solid fa-camera-rotate"></i> Stop Camera
+      </button>
+    </div>
+
+    <!-- Live Scan Result Card -->
+    <div id="scanResultCard" class="scan-result-card"></div>
+
+    <!-- Manual Code Fallback (Ideal for Hackathon / Desktop browser testing) -->
+    <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--card-border);">
+      <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleManualInput()">
+        <span style="font-size: 13px; font-weight: 600; color: var(--text-muted);">
+          <i class="fa-solid fa-keyboard"></i> Test Token Manual Entry (For Local Dev / No Camera)
+        </span>
+        <i class="fa-solid fa-chevron-down" id="manualToggleIcon" style="font-size: 12px; color: var(--text-muted);"></i>
+      </div>
+
+      <div id="manualInputContainer" style="display: none; margin-top: 14px;">
+        <div style="display: flex; gap: 10px;">
+          <input type="text" id="manualTokenInput" class="form-control" placeholder="Paste QR token string here...">
+          <button type="button" class="btn btn-primary" onclick="submitManualToken()">
+            Verify
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Boarding Policy Guidance -->
+  <div style="margin-top: 20px; padding: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: var(--radius-md); font-size: 12px; color: var(--text-muted); line-height: 1.6;">
+    <strong><i class="fa-solid fa-shield-halved" style="color: var(--primary);"></i> Anti-Fraud Attendance Policy:</strong>
+    Boarding attendance records are cryptographically verified by the server. Each trip enforces a database-level unique constraint to prevent duplicate attendance scans. QR tokens expire automatically when trips conclude.
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- HTML5 QR Code Library from CDN -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="{{ url_for('static', filename='js/qr_scanner.js') }}"></script>
+{% endblock %}

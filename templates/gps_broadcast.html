@@ -1,0 +1,137 @@
+{% extends 'base.html' %}
+
+{% block title %}GPS Broadcast - BUS-TED!{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+
+  <!-- Header Card -->
+  <div class="card" style="margin-bottom: 24px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+      <div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <h2 style="font-size: 22px; font-weight: 800; color: #0f172a;">
+            Live GPS Broadcaster
+          </h2>
+          <span id="broadcastStatusPill" style="font-size: 12px; font-weight: 700; background: #f1f5f9; color: var(--text-muted); padding: 4px 12px; border-radius: 9999px;">
+            Initializing...
+          </span>
+        </div>
+        <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+          Broadcasting actual GPS coordinates from your device to students via WebSockets.
+        </p>
+      </div>
+
+      <div style="display: flex; gap: 10px;">
+        <button type="button" class="btn btn-outline" id="toggleTrackingBtn" onclick="toggleTracking()">
+          <i class="fa-solid fa-pause"></i> Pause Broadcast
+        </button>
+        <a href="{{ url_for('driver_dashboard') }}" class="btn btn-primary">
+          <i class="fa-solid fa-gauge-high"></i> Driver Console
+        </a>
+      </div>
+    </div>
+  </div>
+
+  {% if not active_trip %}
+    <div class="alert alert-warning">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      <strong>Notice:</strong> You do not currently have an active trip running. Please return to the <a href="{{ url_for('driver_dashboard') }}" style="color: inherit; font-weight: 700;">Driver Dashboard</a> and click <strong>"Start Campus Trip"</strong> to enable student tracking.
+    </div>
+  {% endif %}
+
+  <!-- Grid: Map & Live Telemetry -->
+  <div class="dashboard-layout">
+    
+    <!-- Map Container -->
+    <div class="card" style="margin-bottom: 0;">
+      <div class="card-header">
+        <div class="card-title">
+          <i class="fa-solid fa-location-crosshairs" style="color: var(--primary);"></i>
+          <span>Live Coordinate Stream</span>
+        </div>
+        <span style="font-size: 12px; color: var(--text-muted);" id="lastPacketTime">Waiting for first fix...</span>
+      </div>
+
+      <div class="map-wrapper" style="height: 420px;">
+        <div id="map"></div>
+      </div>
+    </div>
+
+    <!-- Telemetry Cards -->
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+
+      <!-- Live GPS Readout Card -->
+      <div class="card" style="margin-bottom: 0;">
+        <div class="card-title" style="margin-bottom: 16px;">
+          <i class="fa-solid fa-satellite" style="color: var(--primary);"></i>
+          <span>GPS Fix Telemetry</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div style="padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: var(--radius-sm); display: flex; justify-content: space-between;">
+            <span style="font-size: 13px; color: var(--text-muted);">Latitude</span>
+            <strong style="font-family: monospace; font-size: 14px;" id="dispLat">--.------</strong>
+          </div>
+
+          <div style="padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: var(--radius-sm); display: flex; justify-content: space-between;">
+            <span style="font-size: 13px; color: var(--text-muted);">Longitude</span>
+            <strong style="font-family: monospace; font-size: 14px;" id="dispLng">--.------</strong>
+          </div>
+
+          <div style="padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: var(--radius-sm); display: flex; justify-content: space-between;">
+            <span style="font-size: 13px; color: var(--text-muted);">Accuracy</span>
+            <strong style="font-family: monospace; font-size: 14px;" id="dispAccuracy">-- m</strong>
+          </div>
+
+          <div style="padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: var(--radius-sm); display: flex; justify-content: space-between;">
+            <span style="font-size: 13px; color: var(--text-muted);">Speed</span>
+            <strong style="font-family: monospace; font-size: 14px;" id="dispSpeed">-- km/h</strong>
+          </div>
+
+          <div style="padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: var(--radius-sm); display: flex; justify-content: space-between;">
+            <span style="font-size: 13px; color: var(--text-muted);">Updates Transmitted</span>
+            <strong style="font-family: monospace; font-size: 14px;" id="dispCount">0 packets</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- Developer Info -->
+      <div class="card" style="margin-bottom: 0; background: #f8fafc;">
+        <div style="font-size: 13px; font-weight: 700; margin-bottom: 6px; color: var(--text-main);">
+          <i class="fa-solid fa-circle-question" style="color: var(--primary);"></i> Geolocation Info
+        </div>
+        <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5;">
+          The browser Geolocation API requires location permission. On <code>localhost</code>, browsers permit GPS without HTTPS. If testing on remote devices over local Wi-Fi, ensure permission is granted in browser site settings.
+        </p>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/map.js') }}"></script>
+<script src="{{ url_for('static', filename='js/gps_tracking.js') }}"></script>
+<script>
+  window.busRouteData = {
+    tripId: {% if active_trip %}{{ active_trip.id }}{% else %}null{% endif %},
+    busId: {% if assignment and assignment.bus_id %}{{ assignment.bus_id }}{% else %}null{% endif %},
+    busNumber: "{{ assignment.bus_number or 'BUS-12' }}",
+    stops: [
+      {% for stop in stops %}
+        {
+          id: {{ stop.id }},
+          name: "{{ stop.stop_name }}",
+          order: {{ stop.stop_order }},
+          lat: {{ stop.latitude }},
+          lng: {{ stop.longitude }}
+        }{% if not loop.last %},{% endif %}
+      {% endfor %}
+    ]
+  };
+</script>
+{% endblock %}

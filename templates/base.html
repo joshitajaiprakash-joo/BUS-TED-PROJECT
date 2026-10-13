@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}BUS-TED! - Smart College Bus Tracking{% endblock %}</title>
+  
+  <!-- CSRF Token Meta for Fetch Requests -->
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+  <!-- Leaflet CSS for Maps -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Socket.IO -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+
+  <!-- ==================== SIDEBAR ==================== -->
+  <aside class="app-sidebar" id="appSidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">
+        <i class="fa-solid fa-bus"></i>
+      </div>
+      <div class="brand-info">
+        <h1>BUS-TED!</h1>
+        <p>Your Campus. Your Bus. In Real Time.</p>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-title">Main Navigation</div>
+
+      {% if session.get('role') == 'driver' %}
+        <a href="{{ url_for('driver_dashboard') }}" class="nav-link {% if request.path == url_for('driver_dashboard') %}active{% endif %}">
+          <i class="fa-solid fa-gauge-high"></i>
+          <span>Driver Dashboard</span>
+        </a>
+        <a href="{{ url_for('gps_broadcast') }}" class="nav-link {% if request.path == url_for('gps_broadcast') %}active{% endif %}">
+          <i class="fa-solid fa-satellite-dish"></i>
+          <span>GPS Broadcast</span>
+        </a>
+        <a href="{{ url_for('passenger_feed') }}" class="nav-link {% if request.path == url_for('passenger_feed') %}active{% endif %}">
+          <i class="fa-solid fa-users-viewfinder"></i>
+          <span>Passenger Feed</span>
+        </a>
+      {% else %}
+        <a href="{{ url_for('student_dashboard') }}" class="nav-link {% if request.path == url_for('student_dashboard') %}active{% endif %}">
+          <i class="fa-solid fa-table-cells-large"></i>
+          <span>Dashboard</span>
+        </a>
+        <a href="{{ url_for('my_bus') }}" class="nav-link {% if request.path == url_for('my_bus') %}active{% endif %}">
+          <i class="fa-solid fa-location-dot"></i>
+          <span>Live Tracking</span>
+        </a>
+        <a href="{{ url_for('scan_qr') }}" class="nav-link {% if request.path == url_for('scan_qr') %}active{% endif %}">
+          <i class="fa-solid fa-qrcode"></i>
+          <span>Scan QR</span>
+        </a>
+      {% endif %}
+
+      <a href="{{ url_for('routes_list') }}" class="nav-link {% if request.path == url_for('routes_list') %}active{% endif %}">
+        <i class="fa-solid fa-route"></i>
+        <span>Routes & Stops</span>
+      </a>
+
+      <a href="{{ url_for('trip_history') }}" class="nav-link {% if request.path == url_for('trip_history') %}active{% endif %}">
+        <i class="fa-solid fa-clock-rotate-left"></i>
+        <span>Trip History</span>
+      </a>
+
+      <a href="{{ url_for('notifications_view') }}" class="nav-link {% if request.path == url_for('notifications_view') %}active{% endif %}">
+        <i class="fa-solid fa-bell"></i>
+        <span>Notifications</span>
+        {% if unread_notif_count and unread_notif_count > 0 %}
+          <span class="nav-badge" id="sidebarNotifBadge">{{ unread_notif_count }}</span>
+        {% endif %}
+      </a>
+
+      <div class="nav-section-title">Account</div>
+
+      <a href="{{ url_for('profile') }}" class="nav-link {% if request.path == url_for('profile') %}active{% endif %}">
+        <i class="fa-solid fa-user-gear"></i>
+        <span>Profile</span>
+      </a>
+
+      <a href="{{ url_for('logout') }}" class="nav-link" style="color: #f87171;">
+        <i class="fa-solid fa-arrow-right-from-bracket"></i>
+        <span>Logout</span>
+      </a>
+    </nav>
+
+    <!-- Sidebar Bottom Promo Card -->
+    <div class="sidebar-cta">
+      <h4>Never miss your bus!</h4>
+      <p>Real-time campus transit with verified QR attendance.</p>
+      <div class="bus-illustration">
+        <i class="fa-solid fa-van-shuttle"></i>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ==================== MAIN CONTENT AREA ==================== -->
+  <div class="app-main">
+    <!-- Top Navigation Bar -->
+    <header class="top-navbar">
+      <div class="top-left">
+        <button class="mobile-toggle" id="sidebarToggle" aria-label="Toggle navigation">
+          <i class="fa-solid fa-bars"></i>
+        </button>
+        <div class="user-greeting">
+          <h2>
+            Hello, {{ session.get('name', 'Campus Rider').split(' ')[0] }}! 👋
+            <span class="role-badge {{ session.get('role', 'student') }}">
+              {{ session.get('role', 'Student') }}
+            </span>
+          </h2>
+        </div>
+      </div>
+
+      <div class="top-right">
+        <div class="search-bar">
+          <i class="fa-solid fa-magnifying-glass" style="color: var(--text-muted);"></i>
+          <input type="text" placeholder="Search for buses, routes...">
+        </div>
+
+        <a href="{{ url_for('notifications_view') }}" class="action-icon" title="Notifications">
+          <i class="fa-regular fa-bell"></i>
+          {% if unread_notif_count and unread_notif_count > 0 %}
+            <span class="notification-dot" id="topNavNotifDot"></span>
+          {% endif %}
+        </a>
+
+        <a href="{{ url_for('profile') }}" class="user-pill" title="View Profile">
+          <div class="avatar-circle">
+            {{ session.get('name', 'U')[0].upper() }}
+          </div>
+          <div style="display: flex; flex-direction: column; text-align: left; line-height: 1.2;">
+            <span style="font-size: 13px; font-weight: 700;">{{ session.get('name', 'User') }}</span>
+            <span style="font-size: 11px; color: var(--text-muted);">{{ session.get('identifier', 'ID') }}</span>
+          </div>
+        </a>
+      </div>
+    </header>
+
+    <!-- Page Body -->
+    <main class="page-content">
+      <!-- Flash Messages -->
+      <div class="flash-messages">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }}">
+                <span><i class="fa-solid fa-circle-info"></i> {{ message }}</span>
+                <button type="button" onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:16px;">&times;</button>
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+      </div>
+
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  
+  <!-- App Core JS -->
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
+  
+  {% block scripts %}{% endblock %}
+</body>
+</html>

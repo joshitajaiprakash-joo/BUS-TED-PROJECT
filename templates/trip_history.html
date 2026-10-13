@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+
+{% block title %}Trip History - BUS-TED!{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+
+  <!-- Header Card -->
+  <div class="card" style="margin-bottom: 24px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+      <div>
+        <h2 style="font-size: 22px; font-weight: 800; color: #0f172a;">
+          {% if session.get('role') == 'driver' %}Completed Trips Log{% else %}My Boarding History{% endif %}
+        </h2>
+        <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+          Historical campus transportation records retrieved directly from SQLite.
+        </p>
+      </div>
+
+      <div style="font-size: 13px; font-weight: 700; background: var(--primary-light); color: var(--primary); padding: 6px 14px; border-radius: 9999px;">
+        {{ history | length }} Records
+      </div>
+    </div>
+  </div>
+
+  <!-- Records Table Card -->
+  <div class="card">
+    <div class="table-responsive">
+      <table class="custom-table">
+        {% if session.get('role') == 'driver' %}
+          <thead>
+            <tr>
+              <th>Trip ID</th>
+              <th>Bus Number</th>
+              <th>Campus Route</th>
+              <th>Started At</th>
+              <th>Ended At</th>
+              <th>Total Passengers</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if history %}
+              {% for t in history %}
+                <tr>
+                  <td><strong>#TRIP-{{ t.id }}</strong></td>
+                  <td>{{ t.bus_number }} ({{ t.registration_number }})</td>
+                  <td>{{ t.route_name }}</td>
+                  <td>{{ t.started_at }}</td>
+                  <td>{{ t.ended_at or 'In Progress' }}</td>
+                  <td><strong>{{ t.passenger_count }} students</strong></td>
+                  <td>
+                    <span style="font-size: 11px; font-weight: 700; color: {% if t.status == 'completed' %}#065f46; background: #ecfdf5{% else %}#1e40af; background: #eff6ff{% endif %}; padding: 3px 10px; border-radius: 9999px;">
+                      {{ t.status | capitalize }}
+                    </span>
+                  </td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 36px;">
+                  No past trips recorded in database.
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        {% else %}
+          <thead>
+            <tr>
+              <th>Date & Time</th>
+              <th>Bus Taken</th>
+              <th>Route Taken</th>
+              <th>Assigned Driver</th>
+              <th>Trip Status</th>
+              <th>Attendance Verification</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if history %}
+              {% for h in history %}
+                <tr>
+                  <td><strong>{{ h.scanned_at }}</strong></td>
+                  <td>{{ h.bus_number }} ({{ h.registration_number }})</td>
+                  <td>{{ h.route_name }}</td>
+                  <td>{{ h.driver_name }}</td>
+                  <td>
+                    <span style="font-size: 11px; font-weight: 700; color: {% if h.trip_status == 'completed' %}#065f46; background: #ecfdf5{% else %}#1e40af; background: #eff6ff{% endif %}; padding: 3px 8px; border-radius: 9999px;">
+                      {{ h.trip_status | capitalize }}
+                    </span>
+                  </td>
+                  <td>
+                    <span style="font-size: 11px; font-weight: 700; color: #065f46; background: #ecfdf5; padding: 3px 10px; border-radius: 9999px;">
+                      <i class="fa-solid fa-check-circle"></i> Boarded & Recorded
+                    </span>
+                  </td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 36px;">
+                  No prior boarding scans recorded. Scan the driver's QR code when you board to view trip logs here.
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        {% endif %}
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

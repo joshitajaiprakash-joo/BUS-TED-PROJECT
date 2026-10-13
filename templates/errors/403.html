@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+
+{% block title %}Access Denied - BUS-TED!{% endblock %}
+
+{% block content %}
+<div class="card" style="text-align: center; padding: 60px 20px; max-width: 540px; margin: 40px auto;">
+  <div style="font-size: 64px; color: #dc2626; margin-bottom: 16px;">
+    <i class="fa-solid fa-hand"></i>
+  </div>
+  <h2 style="font-size: 26px; font-weight: 800; color: #0f172a;">403 - Permission Denied</h2>
+  <p style="font-size: 14px; color: var(--text-muted); margin: 8px 0 24px;">
+    You do not have administrative or role clearance to access this transportation resource.
+  </p>
+  <div>
+    <a href="{{ url_for('index') }}" class="btn btn-primary">
+      <i class="fa-solid fa-house"></i> Return to Campus Dashboard
+    </a>
+  </div>
+</div>
+{% endblock %}

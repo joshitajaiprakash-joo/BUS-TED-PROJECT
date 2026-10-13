@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+
+{% block title %}My Bus Live Tracking - BUS-TED!{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+
+  <!-- Bus Overview Header Card -->
+  <div class="card" style="margin-bottom: 24px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+      <div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <h2 style="font-size: 22px; font-weight: 800; color: #0f172a;">
+            {{ bus.bus_number or 'BUS-12' }} Live Tracking
+          </h2>
+          {% if active_trip %}
+            <span class="live-pulse" style="background: #ecfdf5; padding: 4px 12px; border-radius: 9999px; border: 1px solid #10b981;">
+              <span class="pulse-dot"></span> LIVE ON ROUTE
+            </span>
+          {% else %}
+            <span style="font-size: 12px; font-weight: 700; background: #f1f5f9; color: var(--text-muted); padding: 4px 10px; border-radius: 9999px;">
+              Trip Not Started
+            </span>
+          {% endif %}
+        </div>
+        <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+          <strong>Route:</strong> {{ bus.route_name or 'North Campus Express' }} &bull;
+          <strong>Reg Number:</strong> {{ bus.registration_number or 'KA-01-EQ-4421' }} &bull;
+          <strong>Vehicle:</strong> {{ bus.model or 'Tata Starbus Ultra' }}
+        </p>
+      </div>
+
+      <div style="display: flex; gap: 10px;">
+        {% if session.get('role') == 'student' %}
+          <a href="{{ url_for('scan_qr') }}" class="btn btn-primary">
+            <i class="fa-solid fa-qrcode"></i> Scan Boarding QR
+          </a>
+        {% else %}
+          <a href="{{ url_for('gps_broadcast') }}" class="btn btn-primary">
+            <i class="fa-solid fa-satellite-dish"></i> Open GPS Broadcaster
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="dashboard-layout">
+    
+    <!-- Large Focused Map -->
+    <div class="card" style="margin-bottom: 0;">
+      <div class="card-header">
+        <div class="card-title">
+          <i class="fa-solid fa-map-location-dot" style="color: var(--primary);"></i>
+          <span>Real-Time Map View</span>
+        </div>
+        <div id="liveGpsTimeBadge" style="font-size: 12px; color: var(--text-muted);">
+          {% if latest_location %}
+            Updated: {{ latest_location.recorded_at }}
+          {% else %}
+            Awaiting live GPS broadcast
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="map-wrapper" style="height: 480px;">
+        <div id="map"></div>
+
+        <div class="map-info-badge">
+          <div style="font-weight: 700; font-size: 13px;">{{ bus.bus_number or 'BUS-12' }}</div>
+          <div style="font-size: 11px; color: var(--text-muted);" id="busGpsStatusText">
+            {% if active_trip %}Trip In Progress{% else %}Trip Scheduled{% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--text-muted);">
+        <div>
+          <i class="fa-solid fa-circle-info" style="color: var(--primary);"></i>
+          Map auto-centers on active bus coordinate updates via WebSockets.
+        </div>
+        <div id="gpsAccuracyDisplay">
+          {% if latest_location and latest_location.accuracy %}
+            GPS Accuracy: &plusmn;{{ latest_location.accuracy | round(1) }}m
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Stops Timeline & Transit Details -->
+    <div style="display: flex; flex-direction: column; gap: 24px;">
+
+      <div class="card" style="margin-bottom: 0;">
+        <div class="card-header">
+          <div class="card-title">
+            <i class="fa-solid fa-route" style="color: var(--primary);"></i>
+            <span>Route Stops Sequence</span>
+          </div>
+          <span style="font-size: 12px; font-weight: 700; color: var(--primary);">{{ stops | length }} Stops</span>
+        </div>
+
+        <div class="timeline-list">
+          {% if stops %}
+            {% for stop in stops %}
+              <div class="timeline-step">
+                <div class="step-marker">{{ stop.stop_order }}</div>
+                <div class="step-content">
+                  <h5>{{ stop.stop_name }}</h5>
+                  <p>Stop #{{ stop.stop_order }} &bull; Lat: {{ stop.latitude | round(4) }}, Lng: {{ stop.longitude | round(4) }}</p>
+                </div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 20px;">No stop data available.</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom: 0;">
+        <div class="card-title" style="margin-bottom: 12px;">
+          <i class="fa-solid fa-id-card" style="color: var(--primary);"></i>
+          <span>Bus Vehicle Details</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
+          <div style="display: flex; justify-content: space-between;">
+            <span style="color: var(--text-muted);">Capacity</span>
+            <strong>{{ bus.capacity or 50 }} Seats</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span style="color: var(--text-muted);">Vehicle Model</span>
+            <strong>{{ bus.model or 'Standard Transit' }}</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span style="color: var(--text-muted);">Trip Status</span>
+            <strong>{% if active_trip %}<span style="color: var(--success);">Active</span>{% else %}Inactive{% endif %}</strong>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/map.js') }}"></script>
+<script>
+  window.busRouteData = {
+    tripId: {% if active_trip %}{{ active_trip.id }}{% else %}null{% endif %},
+    busId: {% if bus and bus.bus_id %}{{ bus.bus_id }}{% else %}null{% endif %},
+    busNumber: "{{ bus.bus_number or 'BUS-12' }}",
+    stops: [
+      {% for stop in stops %}
+        {
+          id: {{ stop.id }},
+          name: "{{ stop.stop_name }}",
+          order: {{ stop.stop_order }},
+          lat: {{ stop.latitude }},
+          lng: {{ stop.longitude }}
+        }{% if not loop.last %},{% endif %}
+      {% endfor %}
+    ],
+    initialGps: {% if latest_location %}{
+      lat: {{ latest_location.latitude }},
+      lng: {{ latest_location.longitude }},
+      recorded_at: "{{ latest_location.recorded_at }}"
+    }{% else %}null{% endif %}
+  };
+</script>
+{% endblock %}

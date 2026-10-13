@@ -1,0 +1,395 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - BUS-TED!{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+
+  <!-- ==================== TOP METRICS ROW ==================== -->
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <div class="metric-icon-box blue">
+        <i class="fa-solid fa-bus"></i>
+      </div>
+      <div class="metric-data">
+        <h3>{{ active_buses_count }}</h3>
+        <div class="title">Active Buses</div>
+        <div class="subtext">Live on routes</div>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-icon-box green">
+        <i class="fa-solid fa-route"></i>
+      </div>
+      <div class="metric-data">
+        <h3>{{ active_routes_count }}</h3>
+        <div class="title">Active Routes</div>
+        <div class="subtext">Across campus</div>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-icon-box orange">
+        <i class="fa-solid fa-calendar-check"></i>
+      </div>
+      <div class="metric-data">
+        <h3>{{ todays_trips_count }}</h3>
+        <div class="title">Today's Trips</div>
+        <div class="subtext">Completed & live</div>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-icon-box purple">
+        <i class="fa-solid fa-users"></i>
+      </div>
+      <div class="metric-data">
+        <h3>{{ current_passengers }} / {{ bus_capacity }}</h3>
+        <div class="title">My Bus Load</div>
+        <div class="subtext">
+          {% if active_trip %}
+            {{ (current_passengers / bus_capacity * 100) | round(0) | int }}% Occupied
+          {% else %}
+            Trip idle
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-icon-box yellow">
+        <i class="fa-solid fa-bell"></i>
+      </div>
+      <div class="metric-data">
+        <h3>{{ unread_notif_count }}</h3>
+        <div class="title">Alerts</div>
+        <div class="subtext">Requires attention</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MAIN SECTION (MAP + RIGHT CARDS) ==================== -->
+  <div class="dashboard-layout">
+    
+    <!-- LEFT: LIVE MAP CARD -->
+    <div class="card" style="margin-bottom: 0;">
+      <div class="card-header">
+        <div class="card-title">
+          <i class="fa-solid fa-satellite-dish" style="color: var(--primary);"></i>
+          <span>Live Bus Tracking</span>
+          {% if is_live %}
+            <span class="live-pulse" style="margin-left: 10px;">
+              <span class="pulse-dot"></span> LIVE
+            </span>
+          {% else %}
+            <span style="font-size: 11px; padding: 2px 8px; border-radius: 9999px; background: #f1f5f9; color: var(--text-muted); margin-left: 10px;">
+              {% if active_trip %}Location Pending{% else %}Trip Not Started{% endif %}
+            </span>
+          {% endif %}
+        </div>
+        <a href="{{ url_for('routes_list') }}" class="card-action">View All Routes &rarr;</a>
+      </div>
+
+      <!-- Leaflet Map Container -->
+      <div class="map-wrapper">
+        <div id="map"></div>
+
+        <!-- Floating Bus Status Pill -->
+        <div class="map-info-badge" id="busInfoBadge">
+          <div style="font-weight: 700; font-size: 13px; color: var(--text-main);">
+            <i class="fa-solid fa-van-shuttle" style="color: var(--primary);"></i>
+            {{ student.bus_number or 'No Bus Assigned' }}
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;" id="busGpsStatusText">
+            {% if is_live %}
+              Broadcasting actual GPS
+            {% elif active_trip %}
+              Awaiting driver location
+            {% else %}
+              Driver has not started trip
+            {% endif %}
+          </div>
+          <div style="font-size: 11px; font-weight: 600; color: var(--success); margin-top: 4px;" id="busSeatsPill">
+            {{ seats_available }} seats available
+          </div>
+        </div>
+
+        <!-- Floating Nearest Stop Chip -->
+        {% if student and student.default_stop_name %}
+          <div class="nearest-stop-chip">
+            <i class="fa-solid fa-person-walking" style="color: var(--primary); font-size: 18px;"></i>
+            <div>
+              <div style="font-size: 11px; color: var(--text-muted);">Your Assigned Stop</div>
+              <div style="font-size: 13px; font-weight: 700;">{{ student.default_stop_name }}</div>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Quick Action Buttons Below Map -->
+      <div style="display: flex; gap: 12px; margin-top: 18px; flex-wrap: wrap;">
+        {% if boarded %}
+          <div style="padding: 10px 16px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: var(--radius-md); font-size: 13px; font-weight: 600; color: #065f46; display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-circle-check"></i> Boarding Confirmed for Current Trip!
+          </div>
+        {% else %}
+          <a href="{{ url_for('scan_qr') }}" class="btn btn-primary">
+            <i class="fa-solid fa-qrcode"></i> Scan Boarding QR Code
+          </a>
+        {% endif %}
+
+        <a href="{{ url_for('my_bus') }}" class="btn btn-outline">
+          <i class="fa-solid fa-compass"></i> Focus My Bus
+        </a>
+
+        {% if driver and driver.phone %}
+          <a href="tel:{{ driver.phone }}" class="btn btn-outline" style="margin-left: auto;">
+            <i class="fa-solid fa-phone"></i> Contact Driver ({{ driver.name }})
+          </a>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- RIGHT: UPCOMING ARRIVALS & NOTIFICATIONS -->
+    <div style="display: flex; flex-direction: column; gap: 24px;">
+      
+      <!-- Upcoming Arrivals Card -->
+      <div class="card" style="margin-bottom: 0;">
+        <div class="card-header">
+          <div class="card-title">
+            <i class="fa-solid fa-clock" style="color: var(--primary);"></i>
+            <span>Campus Buses</span>
+          </div>
+          <a href="{{ url_for('routes_list') }}" class="card-action">View All &rarr;</a>
+        </div>
+
+        <div class="list-items">
+          <div class="list-item-card">
+            <div class="item-left">
+              <div class="item-icon">
+                <i class="fa-solid fa-bus"></i>
+              </div>
+              <div class="item-details">
+                <h4>BUS-12 (North Express)</h4>
+                <p>Hebbal &rarr; Central Campus</p>
+              </div>
+            </div>
+            <div class="item-right">
+              <div class="time-badge">
+                {% if active_trip and student.bus_number == 'BUS-12' %}Active{% else %}Scheduled{% endif %}
+              </div>
+              <div class="seats-badge">{{ seats_available }} seats</div>
+            </div>
+          </div>
+
+          <div class="list-item-card">
+            <div class="item-left">
+              <div class="item-icon" style="background-color: var(--success-light); color: var(--success);">
+                <i class="fa-solid fa-bus"></i>
+              </div>
+              <div class="item-details">
+                <h4>BUS-07 (South Shuttle)</h4>
+                <p>Silk Board &rarr; Central Campus</p>
+              </div>
+            </div>
+            <div class="item-right">
+              <div class="time-badge">Ready</div>
+              <div class="seats-badge">45 seats</div>
+            </div>
+          </div>
+
+          <div class="list-item-card">
+            <div class="item-left">
+              <div class="item-icon" style="background-color: var(--warning-light); color: var(--warning);">
+                <i class="fa-solid fa-bus"></i>
+              </div>
+              <div class="item-details">
+                <h4>BUS-03 (East Feeder)</h4>
+                <p>Indiranagar &rarr; Central Campus</p>
+              </div>
+            </div>
+            <div class="item-right">
+              <div class="time-badge">Ready</div>
+              <div class="seats-badge">40 seats</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Notifications Card -->
+      <div class="card" style="margin-bottom: 0;">
+        <div class="card-header">
+          <div class="card-title">
+            <i class="fa-solid fa-bell" style="color: #f59e0b;"></i>
+            <span>Recent Alerts</span>
+          </div>
+          <a href="{{ url_for('notifications_view') }}" class="card-action">View All &rarr;</a>
+        </div>
+
+        <div class="list-items">
+          {% if recent_notifications %}
+            {% for notif in recent_notifications %}
+              <div class="list-item-card">
+                <div class="item-left">
+                  <div class="item-icon" style="background: {% if notif.type == 'trip' %}#eff6ff{% elif notif.type == 'success' %}#ecfdf5{% else %}#fffbeb{% endif %}; color: {% if notif.type == 'trip' %}#2563eb{% elif notif.type == 'success' %}#10b981{% else %}#f59e0b{% endif %};">
+                    <i class="fa-solid {% if notif.type == 'trip' %}fa-van-shuttle{% elif notif.type == 'success' %}fa-check{% else %}fa-triangle-exclamation{% endif %}"></i>
+                  </div>
+                  <div class="item-details">
+                    <h4>{{ notif.title }}</h4>
+                    <p>{{ notif.message | truncate(45) }}</p>
+                  </div>
+                </div>
+                <div class="item-right">
+                  <span style="font-size: 11px; color: var(--text-muted);">{{ notif.created_at.split(' ')[1][:5] if notif.created_at and ' ' in notif.created_at else 'Recent' }}</span>
+                </div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 12px;">No new alerts.</div>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== BOTTOM 3 CARDS ROW ==================== -->
+  <div class="dashboard-layout-bottom" style="margin-top: 24px;">
+    
+    <!-- 1. Route Stops Schedule -->
+    <div class="card" style="margin-bottom: 0;">
+      <div class="card-header">
+        <div class="card-title">
+          <i class="fa-solid fa-list-ol" style="color: var(--primary);"></i>
+          <span>Route Stops Schedule</span>
+        </div>
+        <span style="font-size: 12px; font-weight: 600; color: var(--text-muted);">{{ student.route_name or 'Route 01' }}</span>
+      </div>
+
+      <div class="timeline-list">
+        {% if stops %}
+          {% for stop in stops %}
+            <div class="timeline-step">
+              <div class="step-marker">{{ stop.stop_order }}</div>
+              <div class="step-content">
+                <h5>{{ stop.stop_name }}</h5>
+                <p>Stop #{{ stop.stop_order }} on Route {{ student.route_number or 'R-01' }}</p>
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 20px;">No stop data available.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- 2. Occupancy Overview (Chart.js) -->
+    <div class="card" style="margin-bottom: 0;">
+      <div class="card-header">
+        <div class="card-title">
+          <i class="fa-solid fa-chart-pie" style="color: var(--purple);"></i>
+          <span>Occupancy Overview</span>
+        </div>
+        <span style="font-size: 12px; font-weight: 700; color: var(--text-main);">{{ current_passengers }} / {{ bus_capacity }}</span>
+      </div>
+
+      <div style="height: 180px; position: relative; display: flex; align-items: center; justify-content: center;">
+        <canvas id="occupancyChart"></canvas>
+      </div>
+
+      <div style="display: flex; justify-content: space-around; margin-top: 14px; text-align: center;">
+        <div>
+          <div style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+            <span style="width: 10px; height: 10px; background: #10b981; border-radius: 50%; display: inline-block;"></span>
+            Available
+          </div>
+          <div style="font-size: 15px; font-weight: 700; margin-top: 2px;">{{ seats_available }}</div>
+        </div>
+        <div>
+          <div style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+            <span style="width: 10px; height: 10px; background: #f97316; border-radius: 50%; display: inline-block;"></span>
+            Boarded
+          </div>
+          <div style="font-size: 15px; font-weight: 700; margin-top: 2px;">{{ current_passengers }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Smart Travel Banner Card -->
+    <div class="card" style="margin-bottom: 0; background: linear-gradient(135deg, #0b1329 0%, #1e3a8a 100%); color: white; display: flex; flex-direction: column; justify-content: space-between;">
+      <div>
+        <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #fbbf24; letter-spacing: 0.5px;">Smart Transit</div>
+        <h3 style="font-size: 20px; font-weight: 800; margin-top: 6px; line-height: 1.3;">Smart travel starts here</h3>
+        <p style="font-size: 13px; color: #cbd5e1; margin-top: 8px;">Plan • Track • Ride with ease across all university campus routes.</p>
+      </div>
+
+      <div style="margin: 20px 0; text-align: center; font-size: 48px; color: #fbbf24;">
+        <i class="fa-solid fa-bus-simple"></i>
+      </div>
+
+      <div>
+        <a href="{{ url_for('routes_list') }}" class="btn btn-block" style="background: #fbbf24; color: #0f172a; font-weight: 700;">
+          <i class="fa-solid fa-map-location-dot"></i> Explore Campus Routes
+        </a>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/map.js') }}"></script>
+<script>
+  // Initialize Chart.js Occupancy Donut
+  const ctx = document.getElementById('occupancyChart');
+  if (ctx) {
+    const occupied = {{ current_passengers }};
+    const available = {{ seats_available }};
+    new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Seats Available', 'Boarded Passengers'],
+        datasets: [{
+          data: [available, occupied],
+          backgroundColor: ['#10b981', '#f97316'],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '72%',
+        plugins: {
+          legend: { display: false }
+        }
+      }
+    });
+  }
+
+  // Pass Route Stops & Current GPS to Map JS
+  window.busRouteData = {
+    tripId: {% if active_trip %}{{ active_trip.id }}{% else %}null{% endif %},
+    busId: {% if student and student.bus_id %}{{ student.bus_id }}{% else %}null{% endif %},
+    busNumber: "{{ student.bus_number or 'BUS-12' }}",
+    stops: [
+      {% for stop in stops %}
+        {
+          id: {{ stop.id }},
+          name: "{{ stop.stop_name }}",
+          order: {{ stop.stop_order }},
+          lat: {{ stop.latitude }},
+          lng: {{ stop.longitude }}
+        }{% if not loop.last %},{% endif %}
+      {% endfor %}
+    ],
+    initialGps: {% if latest_location %}{
+      lat: {{ latest_location.latitude }},
+      lng: {{ latest_location.longitude }},
+      recorded_at: "{{ latest_location.recorded_at }}"
+    }{% else %}null{% endif %}
+  };
+</script>
+{% endblock %}

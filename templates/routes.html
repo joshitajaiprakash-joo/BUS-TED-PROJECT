@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+
+{% block title %}Campus Routes & Stops - BUS-TED!{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+
+  <!-- Header Card -->
+  <div class="card" style="margin-bottom: 24px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+      <div>
+        <h2 style="font-size: 22px; font-weight: 800; color: #0f172a;">Campus Transit Routes</h2>
+        <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+          Official college bus schedules, ordered pickup stops, and active trip statuses.
+        </p>
+      </div>
+      <div style="font-size: 13px; font-weight: 700; background: var(--primary-light); color: var(--primary); padding: 6px 14px; border-radius: 9999px;">
+        {{ routes | length }} Campus Routes Active
+      </div>
+    </div>
+  </div>
+
+  <div class="dashboard-layout">
+
+    <!-- LEFT: ROUTE CARDS LIST -->
+    <div style="display: flex; flex-direction: column; gap: 18px;">
+      {% if routes %}
+        {% for r in routes %}
+          {% set trip = active_trips.get(r.id) %}
+          {% set stops = stops_by_route.get(r.id, []) %}
+
+          <div class="card route-card" style="margin-bottom: 0; cursor: pointer; border-left: 4px solid var(--primary);" onclick="selectRoute({{ r.id }})">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+              <div>
+                <span style="font-size: 11px; font-weight: 800; background: #e2e8f0; color: var(--text-main); padding: 2px 8px; border-radius: var(--radius-sm); letter-spacing: 0.5px;">
+                  {{ r.route_number }}
+                </span>
+                <h3 style="font-size: 17px; font-weight: 800; color: var(--text-main); margin-top: 6px;">
+                  {{ r.route_name }}
+                </h3>
+                <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">
+                  <i class="fa-solid fa-arrow-right" style="color: var(--primary); font-size: 11px;"></i>
+                  {{ r.start_point }} &rarr; {{ r.destination }}
+                </p>
+              </div>
+
+              <div>
+                {% if trip %}
+                  <span class="live-pulse" style="background: #ecfdf5; padding: 4px 10px; border-radius: 9999px; border: 1px solid #10b981;">
+                    <span class="pulse-dot"></span> {{ trip.bus_number }} LIVE
+                  </span>
+                {% else %}
+                  <span style="font-size: 11px; font-weight: 700; background: #f1f5f9; color: var(--text-muted); padding: 3px 8px; border-radius: 9999px;">
+                    Scheduled
+                  </span>
+                {% endif %}
+              </div>
+            </div>
+
+            <!-- Route Summary Info -->
+            <div style="display: flex; gap: 16px; padding: 10px 14px; background: #f8fafc; border-radius: var(--radius-sm); font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+              <div>
+                <i class="fa-regular fa-clock"></i> ~{{ r.estimated_duration_min or 40 }} mins
+              </div>
+              <div>
+                <i class="fa-solid fa-location-dot"></i> {{ stops | length }} Ordered Stops
+              </div>
+              {% if trip %}
+                <div>
+                  <i class="fa-solid fa-id-card"></i> Driver: {{ trip.driver_name }}
+                </div>
+              {% endif %}
+            </div>
+
+            <!-- Stops Sequence Chips -->
+            <div>
+              <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px;">
+                Stops Sequence:
+              </div>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                {% for s in stops %}
+                  <span style="font-size: 11px; background: #ffffff; border: 1px solid #e2e8f0; padding: 2px 8px; border-radius: var(--radius-sm); color: var(--text-main);">
+                    <strong>{{ s.stop_order }}.</strong> {{ s.stop_name.split('(')[0] }}
+                  </span>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="card">
+          <div class="empty-state">
+            <h4>No Campus Routes Configured</h4>
+            <p>Routes and stops are loaded from the SQLite database.</p>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- RIGHT: INTERACTIVE ROUTE MAP -->
+    <div>
+      <div class="card" style="position: sticky; top: 90px; margin-bottom: 0;">
+        <div class="card-header">
+          <div class="card-title">
+            <i class="fa-solid fa-map-location-dot" style="color: var(--primary);"></i>
+            <span id="selectedRouteMapTitle">Route Map Visualizer</span>
+          </div>
+          <span style="font-size: 12px; color: var(--text-muted);" id="stopCountDisplay">Select route to preview</span>
+        </div>
+
+        <div class="map-wrapper" style="height: 440px;">
+          <div id="map"></div>
+        </div>
+
+        <div style="margin-top: 14px; font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
+          <i class="fa-solid fa-info-circle" style="color: var(--primary);"></i>
+          Click any route on the left to render its full path polyline and sequenced bus stops.
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/map.js') }}"></script>
+<script>
+  // All Routes and stops data from SQLite
+  const routesData = {
+    {% for r in routes %}
+      {{ r.id }}: {
+        name: "{{ r.route_name }}",
+        number: "{{ r.route_number }}",
+        stops: [
+          {% for stop in stops_by_route.get(r.id, []) %}
+            {
+              id: {{ stop.id }},
+              name: "{{ stop.stop_name }}",
+              order: {{ stop.stop_order }},
+              lat: {{ stop.latitude }},
+              lng: {{ stop.longitude }}
+            }{% if not loop.last %},{% endif %}
+          {% endfor %}
+        ]
+      }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  };
+
+  // Select first route by default
+  const routeIds = Object.keys(routesData);
+  if (routeIds.length > 0) {
+    window.busRouteData = {
+      stops: routesData[routeIds[0]].stops,
+      busNumber: routesData[routeIds[0]].number
+    };
+  }
+
+  function selectRoute(routeId) {
+    if (!routesData[routeId]) return;
+    const route = routesData[routeId];
+    
+    document.getElementById('selectedRouteMapTitle').textContent = route.name;
+    document.getElementById('stopCountDisplay').textContent = `${route.stops.length} stops mapped`;
+
+    if (window.renderRouteOnMap) {
+      window.renderRouteOnMap(route.stops);
+    }
+  }
+</script>
+{% endblock %}

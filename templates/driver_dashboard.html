@@ -1,0 +1,328 @@
+{% extends 'base.html' %}
+
+{% block title %}Driver Console - BUS-TED!{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+
+  <!-- ==================== TOP DRIVER STATUS BANNER ==================== -->
+  <div class="card" style="margin-bottom: 24px; background: {% if active_trip %}#ecfdf5{% else %}#ffffff{% endif %}; border-color: {% if active_trip %}#a7f3d0{% else %}var(--card-border){% endif %};">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+      <div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <h2 style="font-size: 20px; font-weight: 800; color: #0f172a;">
+            {{ assignment.bus_number or 'BUS-12' }} Console
+          </h2>
+          {% if active_trip %}
+            <span class="live-pulse" style="background: #ffffff; padding: 4px 10px; border-radius: 9999px; border: 1px solid #10b981;">
+              <span class="pulse-dot"></span> TRIP IN PROGRESS
+            </span>
+          {% else %}
+            <span style="font-size: 12px; font-weight: 700; background: #f1f5f9; color: var(--text-muted); padding: 4px 10px; border-radius: 9999px;">
+              IDLE / OFF-DUTY
+            </span>
+          {% endif %}
+        </div>
+        <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+          <strong>Route:</strong> {{ assignment.route_name or 'Unassigned' }} ({{ assignment.start_point }} &rarr; {{ assignment.destination }}) |
+          <strong>Reg:</strong> {{ assignment.registration_number or 'N/A' }}
+        </p>
+      </div>
+
+      <!-- Action Buttons: Start or End Trip -->
+      <div style="display: flex; gap: 12px; align-items: center;">
+        {% if active_trip %}
+          <form method="POST" action="{{ url_for('end_trip') }}" onsubmit="return confirm('Are you sure you want to END the trip? This will stop GPS broadcasting and close QR attendance.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-danger" style="padding: 12px 24px; font-size: 14px;">
+              <i class="fa-solid fa-stop"></i> End Current Trip
+            </button>
+          </form>
+          <a href="{{ url_for('gps_broadcast') }}" class="btn btn-primary" style="padding: 12px 24px;">
+            <i class="fa-solid fa-satellite-dish"></i> GPS Broadcaster
+          </a>
+        {% else %}
+          <form method="POST" action="{{ url_for('start_trip') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-success" style="padding: 12px 28px; font-size: 15px; font-weight: 700;">
+              <i class="fa-solid fa-play"></i> Start Campus Trip
+            </button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== DRIVER MAIN WORKSPACE GRID ==================== -->
+  <div class="dashboard-layout">
+
+    <!-- LEFT COLUMN: QR CODE + LIVE PASSENGER COUNTER -->
+    <div style="display: flex; flex-direction: column; gap: 24px;">
+
+      {% if active_trip %}
+        <!-- Active Trip QR Code Card -->
+        <div class="card" style="margin-bottom: 0;">
+          <div class="card-header">
+            <div class="card-title">
+              <i class="fa-solid fa-qrcode" style="color: var(--primary);"></i>
+              <span>Active Boarding QR Code</span>
+            </div>
+            <button type="button" class="btn btn-outline btn-sm" id="refreshQrBtn" onclick="refreshTripQr()">
+              <i class="fa-solid fa-rotate-right"></i> Refresh QR
+            </button>
+          </div>
+
+          <div style="text-align: center; padding: 12px;">
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+              Display this QR code to students boarding at campus bus stops. Token updates securely for each active trip.
+            </p>
+
+            <div style="display: inline-block; padding: 16px; background: white; border: 2px solid #e2e8f0; border-radius: var(--radius-lg); box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+              <img id="driverQrImage" src="{{ url_for('get_qr_image', trip_id=active_trip.id) }}" alt="Boarding QR Code" style="width: 220px; height: 220px; display: block; border-radius: 8px;">
+            </div>
+
+            <div style="margin-top: 14px; font-size: 12px; color: var(--text-muted);" id="qrExpiryNotice">
+              <i class="fa-solid fa-shield-halved" style="color: var(--success);"></i>
+              Cryptographically verified QR token &bull; Valid for active trip
+            </div>
+          </div>
+        </div>
+      {% else %}
+        <!-- Idle State Info Card -->
+        <div class="card" style="margin-bottom: 0;">
+          <div class="empty-state">
+            <div class="empty-icon">
+              <i class="fa-solid fa-bus"></i>
+            </div>
+            <h4>No Active Trip Running</h4>
+            <p>Click "Start Campus Trip" above to generate a verified student boarding QR code and begin GPS broadcasting.</p>
+          </div>
+        </div>
+      {% endif %}
+
+      <!-- Live Passenger Boarding Feed Card -->
+      <div class="card" style="margin-bottom: 0;">
+        <div class="card-header">
+          <div class="card-title">
+            <i class="fa-solid fa-users-viewfinder" style="color: var(--purple);"></i>
+            <span>Real-Time Boarding Activity</span>
+          </div>
+          <div style="font-size: 13px; font-weight: 700; background: var(--purple-light); color: var(--purple); padding: 4px 10px; border-radius: 9999px;">
+            <span id="livePassengerCount">{{ passengers | length }}</span> / {{ assignment.capacity or 50 }} Boarded
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th>Student Name</th>
+                <th>Student ID</th>
+                <th>Boarding Time</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="passengerTableBody">
+              {% if passengers %}
+                {% for p in passengers %}
+                  <tr>
+                    <td><strong>{{ p.student_name }}</strong></td>
+                    <td><span style="font-family: monospace;">{{ p.student_code }}</span></td>
+                    <td>{{ p.scanned_at.split(' ')[1][:8] if p.scanned_at and ' ' in p.scanned_at else p.scanned_at }}</td>
+                    <td>
+                      <span style="font-size: 11px; font-weight: 700; color: #065f46; background: #ecfdf5; padding: 2px 8px; border-radius: 9999px;">
+                        <i class="fa-solid fa-check"></i> Verified
+                      </span>
+                    </td>
+                  </tr>
+                {% endfor %}
+              {% else %}
+                <tr id="noPassengersRow">
+                  <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 24px;">
+                    No students have boarded this trip yet.
+                  </td>
+                </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT COLUMN: ROUTE MAP & GPS BROADCASTER PREVIEW -->
+    <div style="display: flex; flex-direction: column; gap: 24px;">
+
+      <!-- Driver Route Map -->
+      <div class="card" style="margin-bottom: 0;">
+        <div class="card-header">
+          <div class="card-title">
+            <i class="fa-solid fa-map-location-dot" style="color: var(--primary);"></i>
+            <span>Assigned Route & Stops</span>
+          </div>
+          <span style="font-size: 12px; color: var(--text-muted);">{{ stops | length }} Campus Stops</span>
+        </div>
+
+        <div class="map-wrapper" style="height: 320px;">
+          <div id="map"></div>
+        </div>
+
+        <!-- Quick GPS Broadcast Status Widget -->
+        <div style="margin-top: 16px; padding: 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <i class="fa-solid fa-location-crosshairs" style="color: var(--primary); font-size: 20px;"></i>
+            <div>
+              <div style="font-size: 13px; font-weight: 700;">GPS Broadcast Status</div>
+              <div style="font-size: 11px; color: var(--text-muted);" id="driverGpsStatus">
+                {% if active_trip %}Broadcasting from browser Geolocation API{% else %}Awaiting trip start{% endif %}
+              </div>
+            </div>
+          </div>
+          {% if active_trip %}
+            <a href="{{ url_for('gps_broadcast') }}" class="btn btn-outline btn-sm">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Full Screen
+            </a>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Recent Completed Trips -->
+      <div class="card" style="margin-bottom: 0;">
+        <div class="card-header">
+          <div class="card-title">
+            <i class="fa-solid fa-clock-rotate-left" style="color: var(--warning);"></i>
+            <span>Recent Completed Trips</span>
+          </div>
+          <a href="{{ url_for('trip_history') }}" class="card-action">View History &rarr;</a>
+        </div>
+
+        <div class="list-items">
+          {% if recent_trips %}
+            {% for t in recent_trips %}
+              <div class="list-item-card">
+                <div class="item-left">
+                  <div class="item-icon" style="background: var(--success-light); color: var(--success);">
+                    <i class="fa-solid fa-circle-check"></i>
+                  </div>
+                  <div class="item-details">
+                    <h4>{{ t.route_name }}</h4>
+                    <p>{{ t.started_at.split(' ')[0] if t.started_at else 'Recent' }} &bull; {{ t.passenger_count }} passengers</p>
+                  </div>
+                </div>
+                <div class="item-right">
+                  <span style="font-size: 11px; font-weight: 700; color: #065f46; background: #ecfdf5; padding: 2px 8px; border-radius: 9999px;">
+                    Completed
+                  </span>
+                </div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 12px;">No completed trips recorded yet.</div>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/map.js') }}"></script>
+<script>
+  window.busRouteData = {
+    tripId: {% if active_trip %}{{ active_trip.id }}{% else %}null{% endif %},
+    busId: {% if assignment and assignment.bus_id %}{{ assignment.bus_id }}{% else %}null{% endif %},
+    busNumber: "{{ assignment.bus_number or 'BUS-12' }}",
+    stops: [
+      {% for stop in stops %}
+        {
+          id: {{ stop.id }},
+          name: "{{ stop.stop_name }}",
+          order: {{ stop.stop_order }},
+          lat: {{ stop.latitude }},
+          lng: {{ stop.longitude }}
+        }{% if not loop.last %},{% endif %}
+      {% endfor %}
+    ],
+    initialGps: {% if latest_location %}{
+      lat: {{ latest_location.latitude }},
+      lng: {{ latest_location.longitude }},
+      recorded_at: "{{ latest_location.recorded_at }}"
+    }{% else %}null{% endif %}
+  };
+
+  // Refresh QR Token asynchronously
+  function refreshTripQr() {
+    const btn = document.getElementById('refreshQrBtn');
+    if (!btn) return;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Refreshing...';
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    fetch('/driver/trip/refresh-qr', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken
+      }
+    })
+    .then(res => res.json())
+    .then(data => {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> Refresh QR';
+      if (data.status === 'success') {
+        const qrImg = document.getElementById('driverQrImage');
+        if (qrImg) {
+          // Force reload by appending timestamp
+          qrImg.src = "{{ url_for('get_qr_image', trip_id=active_trip.id if active_trip else 0) }}?t=" + new Date().getTime();
+        }
+        alert('QR Code token refreshed successfully!');
+      } else {
+        alert(data.message || 'Failed to refresh QR.');
+      }
+    })
+    .catch(err => {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> Refresh QR';
+      alert('Error contacting server.');
+    });
+  }
+
+  // Socket.IO Listener for Live Passenger Boarding in Driver Dashboard
+  if (window.appSocket && window.busRouteData.tripId) {
+    window.appSocket.on('passenger_boarded_event', function(data) {
+      if (data.trip_id === window.busRouteData.tripId) {
+        // Update count
+        const countSpan = document.getElementById('livePassengerCount');
+        if (countSpan) countSpan.textContent = data.passenger_count;
+
+        // Remove empty row
+        const emptyRow = document.getElementById('noPassengersRow');
+        if (emptyRow) emptyRow.remove();
+
+        // Add new row at top
+        const tbody = document.getElementById('passengerTableBody');
+        if (tbody) {
+          const row = document.createElement('tr');
+          row.style.animation = 'fadeIn 0.5s ease';
+          row.innerHTML = `
+            <td><strong>${data.student_name}</strong></td>
+            <td><span style="font-family: monospace;">${data.student_id}</span></td>
+            <td>${data.scanned_at}</td>
+            <td>
+              <span style="font-size: 11px; font-weight: 700; color: #065f46; background: #ecfdf5; padding: 2px 8px; border-radius: 9999px;">
+                <i class="fa-solid fa-check"></i> Verified
+              </span>
+            </td>
+          `;
+          tbody.insertBefore(row, tbody.firstChild);
+        }
+      }
+    });
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+
+{% block title %}Passenger Feed - BUS-TED!{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+
+  <!-- Header Card -->
+  <div class="card" style="margin-bottom: 24px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+      <div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <h2 style="font-size: 22px; font-weight: 800; color: #0f172a;">
+            Live Passenger Feed
+          </h2>
+          {% if active_trip %}
+            <span class="live-pulse" style="background: #ecfdf5; padding: 4px 12px; border-radius: 9999px; border: 1px solid #10b981;">
+              <span class="pulse-dot"></span> SCANNING ACTIVE
+            </span>
+          {% else %}
+            <span style="font-size: 12px; font-weight: 700; background: #f1f5f9; color: var(--text-muted); padding: 4px 10px; border-radius: 9999px;">
+              No Active Trip
+            </span>
+          {% endif %}
+        </div>
+        <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+          Verified QR attendance records for {{ active_trip.bus_number or 'current bus' }} on {{ active_trip.route_name or 'assigned route' }}.
+        </p>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <div style="padding: 10px 18px; background: var(--purple-light); border-radius: var(--radius-md); text-align: center;">
+          <div style="font-size: 11px; font-weight: 700; color: var(--purple); text-transform: uppercase;">Total Boarded</div>
+          <div style="font-size: 22px; font-weight: 800; color: var(--text-main);" id="liveFeedCount">
+            {{ passengers | length }}
+          </div>
+        </div>
+        <a href="{{ url_for('driver_dashboard') }}" class="btn btn-outline">
+          <i class="fa-solid fa-arrow-left"></i> Console
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Passenger Table Card -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">
+        <i class="fa-solid fa-user-check" style="color: var(--success);"></i>
+        <span>Boarded Students Roster</span>
+      </div>
+      <span style="font-size: 12px; color: var(--text-muted);">Real-time stream via WebSockets</span>
+    </div>
+
+    <div class="table-responsive">
+      <table class="custom-table">
+        <thead>
+          <tr>
+            <th>Student Name</th>
+            <th>Roll Number / ID</th>
+            <th>Contact Phone</th>
+            <th>Boarding Timestamp</th>
+            <th>Verification Status</th>
+          </tr>
+        </thead>
+        <tbody id="feedTableBody">
+          {% if passengers %}
+            {% for p in passengers %}
+              <tr>
+                <td><strong>{{ p.student_name }}</strong></td>
+                <td><span style="font-family: monospace;">{{ p.student_code }}</span></td>
+                <td>{{ p.phone or 'N/A' }}</td>
+                <td>{{ p.scanned_at }}</td>
+                <td>
+                  <span style="font-size: 11px; font-weight: 700; color: #065f46; background: #ecfdf5; padding: 3px 10px; border-radius: 9999px;">
+                    <i class="fa-solid fa-check-double"></i> Verified QR Scan
+                  </span>
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr id="emptyFeedRow">
+              <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 40px;">
+                <div style="font-size: 32px; color: var(--text-subtle); margin-bottom: 8px;">
+                  <i class="fa-solid fa-user-clock"></i>
+                </div>
+                <strong>Awaiting Boarding Scans</strong>
+                <p style="font-size: 13px; margin-top: 4px;">When students scan your active trip QR code, their attendance will appear here immediately.</p>
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Real-time listener for new boarding events
+  if (window.appSocket && {% if active_trip %}{{ active_trip.id }}{% else %}null{% endif %}) {
+    const tripId = {{ active_trip.id if active_trip else 0 }};
+    
+    window.appSocket.on('passenger_boarded_event', function(data) {
+      if (data.trip_id === tripId) {
+        // Update count
+        const countEl = document.getElementById('liveFeedCount');
+        if (countEl) countEl.textContent = data.passenger_count;
+
+        // Remove empty state row
+        const emptyRow = document.getElementById('emptyFeedRow');
+        if (emptyRow) emptyRow.remove();
+
+        // Prepend new row
+        const tbody = document.getElementById('feedTableBody');
+        if (tbody) {
+          const tr = document.createElement('tr');
+          tr.style.backgroundColor = '#f0fdf4';
+          tr.style.transition = 'background-color 2s ease';
+          tr.innerHTML = `
+            <td><strong>${data.student_name}</strong></td>
+            <td><span style="font-family: monospace;">${data.student_id}</span></td>
+            <td>N/A</td>
+            <td>${data.scanned_at}</td>
+            <td>
+              <span style="font-size: 11px; font-weight: 700; color: #065f46; background: #ecfdf5; padding: 3px 10px; border-radius: 9999px;">
+                <i class="fa-solid fa-check-double"></i> Verified QR Scan
+              </span>
+            </td>
+          `;
+          tbody.insertBefore(tr, tbody.firstChild);
+
+          // Fade out green highlight after 2 seconds
+          setTimeout(() => {
+            tr.style.backgroundColor = 'transparent';
+          }, 2000);
+        }
+      }
+    });
+  }
+</script>
+{% endblock %}

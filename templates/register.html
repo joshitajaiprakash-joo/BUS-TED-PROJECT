@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register - BUS-TED! Campus Bus Tracking</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0b1329 0%, #1e293b 100%);
+      padding: 30px 20px;
+    }
+    .auth-card {
+      background: #ffffff;
+      border-radius: var(--radius-lg);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+      width: 100%;
+      max-width: 520px;
+      padding: 36px 32px;
+    }
+    .role-selector {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .role-option {
+      border: 2px solid var(--card-border);
+      border-radius: var(--radius-md);
+      padding: 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .role-option input {
+      display: none;
+    }
+    .role-option.selected {
+      border-color: var(--primary);
+      background-color: var(--primary-light);
+      color: var(--primary);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="auth-card">
+    <div style="text-align: center; margin-bottom: 24px;">
+      <div style="width: 50px; height: 50px; background: #fbbf24; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; font-size: 26px; margin: 0 auto 10px;">
+        <i class="fa-solid fa-bus"></i>
+      </div>
+      <h2 style="font-size: 22px; font-weight: 800; color: #0f172a;">Create Your Account</h2>
+      <p style="font-size: 13px; color: #64748b;">Join BUS-TED! Campus Transit System</p>
+    </div>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}">
+            <span>{{ message }}</span>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('register') }}" id="registerForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="form-group">
+        <label>Select Your Campus Role</label>
+        <div class="role-selector">
+          <label class="role-option selected" id="studentRoleLabel">
+            <input type="radio" name="role" value="student" checked onchange="handleRoleChange('student')">
+            <i class="fa-solid fa-graduation-cap" style="font-size: 20px; margin-bottom: 6px; display: block;"></i>
+            <strong>Student</strong>
+          </label>
+          <label class="role-option" id="driverRoleLabel">
+            <input type="radio" name="role" value="driver" onchange="handleRoleChange('driver')">
+            <i class="fa-solid fa-id-badge" style="font-size: 20px; margin-bottom: 6px; display: block;"></i>
+            <strong>Driver</strong>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="name">Full Name</label>
+        <input type="text" id="name" name="name" class="form-control" placeholder="e.g. Akshay Sharma" required>
+      </div>
+
+      <div class="form-group">
+        <label for="email">Campus Email</label>
+        <input type="email" id="email" name="email" class="form-control" placeholder="name@bustd.edu" required>
+      </div>
+
+      <div class="form-group">
+        <label for="identifier" id="identifierLabel">Student Roll Number / PRN</label>
+        <input type="text" id="identifier" name="identifier" class="form-control" placeholder="STU-2024-XXXX" required>
+      </div>
+
+      <div class="form-group">
+        <label for="phone">Phone Number</label>
+        <input type="tel" id="phone" name="phone" class="form-control" placeholder="+91 98765 43210">
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" class="form-control" placeholder="••••••••" required>
+        </div>
+        <div class="form-group">
+          <label for="confirm_password">Confirm Password</label>
+          <input type="password" id="confirm_password" name="confirm_password" class="form-control" placeholder="••••••••" required>
+        </div>
+      </div>
+
+      <div id="driverNotice" style="display: none; padding: 10px; background: #fffbeb; border: 1px solid #fde68a; border-radius: var(--radius-sm); font-size: 12px; color: #92400e; margin-bottom: 16px;">
+        <i class="fa-solid fa-shield-halved"></i> <strong>Notice for drivers:</strong> For safety reasons, newly registered driver accounts require administrator authorization before trips can be initiated.
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block" style="padding: 12px; font-size: 15px;">
+        <i class="fa-solid fa-user-plus"></i> Complete Registration
+      </button>
+    </form>
+
+    <div style="text-align: center; margin-top: 20px; font-size: 13px; color: #64748b;">
+      Already have an account? <a href="{{ url_for('login') }}" style="color: var(--primary); font-weight: 600; text-decoration: none;">Sign in here</a>
+    </div>
+  </div>
+
+  <script>
+    function handleRoleChange(role) {
+      const studentLabel = document.getElementById('studentRoleLabel');
+      const driverLabel = document.getElementById('driverRoleLabel');
+      const idLabel = document.getElementById('identifierLabel');
+      const idInput = document.getElementById('identifier');
+      const driverNotice = document.getElementById('driverNotice');
+
+      if (role === 'student') {
+        studentLabel.classList.add('selected');
+        driverLabel.classList.remove('selected');
+        idLabel.textContent = 'Student Roll Number / PRN';
+        idInput.placeholder = 'STU-2024-XXXX';
+        driverNotice.style.display = 'none';
+      } else {
+        driverLabel.classList.add('selected');
+        studentLabel.classList.remove('selected');
+        idLabel.textContent = 'Driver License / Staff ID';
+        idInput.placeholder = 'DRV-88XX';
+        driverNotice.style.display = 'block';
+      }
+    }
+  </script>
+</body>
+</html>
